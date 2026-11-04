@@ -1,0 +1,8 @@
+3D scene build notes
+The 3D view is js/src/scene3d.js (three.js 0.160). The browser loads the prebuilt
+bundle js/vendor/scene3d.bundle.js, so you do not need to build anything to run the app.
+To rebuild after editing the source:
+  npm install three@0.160.0 esbuild
+  npx esbuild js/src/scene3d.js --bundle --minify --format=iife --target=es2019 \
+    --outfile=js/vendor/scene3d.bundle.js --legal-comments=none
+If WebGL is unavailable the app automatically shows the 2D SVG schematic.

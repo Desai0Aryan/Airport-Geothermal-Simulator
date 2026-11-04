@@ -1,0 +1,269 @@
+AIRPORT GEOTHERMAL SIMULATOR - SOURCES AND CALCULATIONS
+=========================================================
+Purpose: let you fact-check every number the simulator shows, by hand.
+Every formula below is the one in js/engine.js (function names in brackets).
+Worked numbers are the simulator defaults: State College PA, 500,000 sq ft,
+100% heating/cooling demand, no incentive. Reproduce them with:
+    node verification/dump.js        (prints the engine's numbers)
+    python3 verification/verify.py   (independent recomputation, 21 checks)
+    node tests/engine.test.js        (19 unit tests)
+
+HOW TO READ THE CONFIDENCE TAGS
+  [SOURCED]    value taken from a named public source (check the source).
+  [PHYSICS]    textbook thermodynamics / unit conversion, no judgment.
+  [CALIBRATED] chosen so the model reproduces a real project (Section 8).
+  [ASSUMED]    engineering judgment. NOT proven. Listed in Section 10 so your
+               team can replace it with a site or vendor number.
+Honest summary: the MATH is verified exactly (Section 9). The INPUT numbers are
+a mix of sourced, calibrated and assumed values. A pre-design simulator cannot
+"prove" site costs; it can only be transparent. Section 10 lists what to confirm.
+
+
+1. SOURCES  (look these up to fact-check; retrieve date 2026-11-03)
+-------------------------------------------------------------------
+S1  Electricity price 0.14 $/kWh  [SOURCED, approximate]
+    U.S. Energy Information Administration (EIA), Electric Power Monthly,
+    Table 5.6.A "Average Price of Electricity to Ultimate Customers", commercial
+    sector, U.S. average, about 14 cents/kWh in the period used.
+    https://www.eia.gov/electricity/monthly/
+    Check: open the table, find "Commercial", read the U.S. average cents/kWh.
+S2  Natural gas price 1.07 $/therm  [SOURCED, approximate]
+    EIA Natural Gas Prices, commercial consumers, about $10-11 per thousand
+    cubic feet. 1 Mcf is about 10.37 therms, so $10.9/Mcf / 10.37 = $1.05/therm.
+    https://www.eia.gov/dnav/ng/ng_pri_sum_dcu_nus_m.htm
+S3  Grid CO2 0.823 lb/kWh  [SOURCED]
+    EPA eGRID national average output emission rate (about 823 lb CO2/MWh... the
+    value is quoted per kWh here as 0.823 lb). https://www.epa.gov/egrid
+S4  Gas CO2 11.70 lb/therm  [SOURCED]
+    EPA emission factor 53.06 kg CO2 / MMBtu = 116.98 lb/MMBtu = 11.70 lb/therm.
+    https://www.epa.gov/climateleadership/ghg-emission-factors-hub
+S5  Monthly mean temperatures (all four cities)  [SOURCED]
+    NOAA/NWS 1991-2020 climate normals (monthly mean of daily average temp), for
+    Minneapolis-St Paul, State College PA, Miami, Phoenix. The values in
+    js/engine.js CLIMATES.monthly are listed in Section 6.
+    https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals
+    https://www.weather.gov/wrh/climate  (NWS NOWData: pick station, "Normals")
+S6  Design temperatures (designHeat / designCool)  [SOURCED, rounded]
+    ASHRAE Handbook - Fundamentals, Climatic Design Conditions (99.6% heating,
+    0.4% cooling dry bulb). Rounded to whole degrees F in the model.
+S7  Undisturbed ground temperature  [SOURCED, rule of thumb]
+    Shallow ground temperature is about the annual mean air temperature, often
+    +1 to +3 F. The model uses annual mean +2 F for State College (48 F air ->
+    50 F). See ASHRAE Handbook - HVAC Applications, Geothermal Energy chapter;
+    also USGS groundwater temperature maps (groundwater about equals ground).
+S8  Real-project validation: Louisville Muhammad Ali Intl Airport (SDF)
+    terminal geothermal borefield. DOE / FAA published case study:
+    648 boreholes x 500 ft, about 9 acres, about 412,766 sq ft, about $22M total
+    (includes MEP upgrades; $10.6M FAA grant), about 40% less energy, about
+    $400,000/yr operating savings. Used ONLY for calibration, Section 8.
+    Find it by searching: "Louisville airport geothermal DOE FAA case study".
+S9  Thermal conductivity k (BTU/h-ft-F)  [SOURCED]
+    Typical ranges: 0.3-0.6 dry light clay or sand, 0.6-1.1 heavy clay or shale,
+    1.3-2.2 limestone, granite or wet sand. Kavanaugh and Rafferty, "Geothermal
+    Heating and Cooling: Design of Ground-Source Heat Pump Systems", ASHRAE 2014
+    (also IGSHPA design manual).
+S10 Water heat capacity 500 BTU/h per gpm per F  [PHYSICS]
+    8.34 lb/gal x 60 min/h x 1 BTU/lb-F = 500.4. Round to 500.
+S11 Unit conversions  [PHYSICS]
+    1 ton of cooling = 12,000 BTU/h. 1 kWh = 3,412.14 BTU. 1 therm = 100,000 BTU.
+    1 acre = 43,560 sq ft. Rankine = F + 459.67.
+S12 Cost benchmarks  [ASSUMED unless you replace them]
+    Well cost, ground-loop $/ft, plant $/ton are order-of-magnitude pre-design
+    numbers. Typical vertical-bore installed cost is $10-25 per ft of bore
+    (model: $15/ft + $1,500/bore). Replace with a driller / RSMeans quote.
+
+
+2. DEMAND MODEL  [degreeHours, buildLoads, loadsAt]
+---------------------------------------------------
+Monthly mean temperature Tm and a within-month spread sigma. Hourly temperature
+in the month is treated as Normal(Tm, sigma). Expected degree-hours above a
+balance temperature b (cooling) or below it (heating), per hour, are closed form:
+    z = (Tm - b)/sigma
+    E[(T-b)+] = sigma * ( phi(z) + z * Phi(z) )     phi, Phi = normal pdf, cdf
+    heating uses the mirror form with z = (b - Tm)/sigma.
+Multiply by hours in the month (24 x days).
+Building loads (BTU/h):
+    Heat  = UAh * sqft * (Tbh - T)+          UAh = 0.70 BTU/h-sqft-F, Tbh = 55 F
+    Cool  = UAc * sqft * (T - Tbc)+ * (1+latent)   UAc = 0.70, Tbc = 60 F
+    Peak loads use the design temperatures (S6) times the sizing factor 1.15.
+Worked example, State College:
+    peak heating = 0.70 x 500,000 x (55 - 5) x 1.15 = 20,125,000 BTU/h = 1,677 tons
+    peak cooling = 0.70 x 500,000 x 1.15 (latent) x (88 - 60) x 1.15 = 12,960,500 BTU/h
+                   (1,080 tons)
+    (sizing factor 1.15 = design margin.)
+    annual heating = 33.10 billion BTU = 331,000 therms of delivered heat
+    annual cooling = 11.08 billion BTU = 923,000 ton-hours
+The brute-force check (Python integrates the normal curve numerically) matches
+the closed form to better than 0.00001%.
+UA = 0.70 is [CALIBRATED] (Section 8); the textbook range for a large
+commercial envelope plus ventilation is roughly 0.3-1.0.
+
+
+3. TRADITIONAL (BASELINE) SYSTEM  [copBaselineCool, effInvCop, baseline in computeAll]
+-------------------------------------------------------------------------------------
+Heating: gas boiler, efficiency 0.85.
+    gas therms = annual heating BTU / 0.85 / 100,000
+               = 33,096,783,180 / 0.85 / 100,000 = 389,374 therms
+Cooling: air-cooled chiller. COP is Carnot fraction:
+    COP_air(T) = etaAir * (T_chw + 459.67) / ((T + airApproach) - T_chw)
+    etaAir 0.33, chilled water 44 F, approach 20 F, clamped to 2..5
+Energy is integrated over the temperature distribution, not computed at one
+average temperature, because 1/COP is not linear in T:
+    kWh = sum over hours of load(T) / COP(T) / 3412.14
+    State College result: 978,515 kWh
+Baseline operating cost:
+    gas        389,374 x $1.07  = $416,630
+    electric   978,515 x $0.14  = $136,992
+    O&M        2.5% of plant capex = $78,789
+    total                         $632,412 / yr
+Baseline plant capex = cooling tons x $1,800 + heating MBH x $60
+    = 1,080.04 x 1,800 + 20,125 x 60 = $1,944,090 + $1,207,500 = $3,151,575.
+(A bug where a single conditional-mean COP understated this by 7.6% was found
+by the independent check and fixed; it now agrees to 0.000%.)
+
+
+4. OPEN-LOOP SYSTEM  [copHeat, copCool, open section of computeAll]
+-------------------------------------------------------------------
+Heat pump COP (Carnot fraction), temperatures in Rankine for the ratio:
+    COP_heat = etaH * T_supply_R / (T_supply - T_source)     etaH 0.50, supply 110 F
+    COP_cool = etaC * T_chw_R / (T_cond - T_chw)             etaC 0.45, chw 44 F
+    T_source = groundwater 50 F - 3 F HX approach - dT/2 (5 F) = 42 F
+    COP_heat = 0.50 x (110+459.67) / (110-42) = 4.19
+    T_cond (cooling) = 50 + 3 + 5 + 8 F condenser approach = 66 F
+    COP_cool = 0.45 x (44+459.67)/(66-44) = 10.3, clamped to the model max 6.00
+Flow needed for a load Q (BTU/h) and water temperature change dT = 10 F:
+    heating: gpm = Q x (1 - 1/COP) / (500 x dT)   (only the extracted heat comes from water)
+    cooling: gpm = Q x (1 + 1/COP) / (500 x dT)   (load plus compressor heat is rejected)
+    State College: heating 3,064 gpm at full peak; required (80% sizing) = 2,451 gpm
+Aquifer limit: the climate preset says how much water the aquifer can supply
+(State College 2,200 gpm). Design flow = min(required, supply) = 2,200 gpm.
+Wells = 2 x ceil(flow / yield per well) = 2 x ceil(2,200/500) = 10 wells
+    (production + injection pairs).
+Coverage: sizing to a fraction c of peak load covers 1-(1-c)^2 of annual energy
+if the load-duration curve is linear (the rest is met by the boiler/chiller):
+    heating coverage 92.0%, cooling coverage 92.6%
+Energy:
+    heat pump heating kWh = annual heating x coverage / 3412.14 / COP = 2,131,500
+    heat pump cooling kWh = 500,925
+    pumping kWh = 160,869  (pump kW per 100 gpm x flow, scaled by (part-load)^1.5)
+    total electricity 2,865,962 kWh;  remaining gas 30,966 therms
+Cost (all x location cost multiplier, default 1.0):
+    source = 10 wells x $100,000 + 2,200 gpm x $350 + $150,000 = $1,920,000
+    heat pump plant = covered capacity (tons) x $2,000/ton = $2,408,271
+    gross install = $4,328,271
+    credit for avoided conventional plant (toggle, default on) = $2,281,263
+    net install = $2,047,008
+Operating cost:
+    electricity 2,865,962 x 0.14 + gas 30,966 x 1.07 + O&M
+    O&M = 1.5% plant + 3.5% of source = $103,324   ->  $537,692 / yr
+Savings and payback:
+    savings = 632,412 - 537,692 = $94,719 / yr
+    simple payback = net install / savings = 2,047,008 / 94,719 = 21.6 years
+    (undiscounted, no escalation, no demand charges)
+
+
+5. CLOSED-LOOP SYSTEM  [closed section of computeAll, borefield solver]
+-----------------------------------------------------------------------
+Ground resistance (borehole thermal resistance form):
+    R_total = g / (2 pi k) + 0.12          (0.12 h-ft-F/BTU = grout, pipe, fluid)
+    g = 1.6 + 0.25 ln(N) (20/spacing)^1.2   N = number of boreholes
+Heat per foot of bore from the fluid temperature range:
+    q' = (T_ground - EFT_min) / R_total       (heating, EFT min 30 F)
+    q' = (EFT_max - T_ground) / R_total       (cooling, EFT max 90 F)
+Long-term ground drift when heating and cooling are unbalanced:
+    drift F = 0.06 x (1.3/k) x imbalance (kBTU/ft/yr), clamped +-15 F
+The sizing loop adds boreholes until the monthly loop temperature stays inside
+the EFT limits for the 25-yr drift. Land = N x spacing^2 / 43,560 acres.
+Cost = N x (depth x $15/ft + $1,500) + $40,000 fixed.
+Results (State College default): see Section 7 table.
+Closed-loop is [ASSUMED] to a larger degree than open-loop: g-function and
+drift are simplified fits, NOT a full g-function (Eskilson) solution. Use
+GLHEPro / EED for final design.
+
+
+6. HYBRID SYSTEM  [hybrid section]
+----------------------------------
+Open share s% of the load is served by the open-loop subsystem, (100-s)% by the
+closed loop. Each is sized for its own share and each subsystem's cost is added
+once; no load is counted twice, and thermal (BTU) and electrical (kWh)
+quantities are never mixed. Plus a fixed integration cost ($120,000). Slider
+is not auto-favored: change it and the numbers change in either direction.
+
+Climate data used (NOAA 1991-2020 normals, monthly mean F, Jan..Dec):
+  Minneapolis   16.2 20.6 33.3 47.1 59.5 69.7 74.3 71.8 63.5 49.5 34.8 22.0
+  State College 26.3 27.5 36.3 47.9 59.0 67.2 71.2 69.2 62.6 51.5 40.4 30.0
+  Miami         68.6 70.7 73.1 76.7 80.1 82.8 84.1 84.2 83.0 80.1 74.8 71.2
+  Phoenix       56.8 59.9 66.3 73.2 82.0 91.4 95.5 94.4 89.2 77.4 65.1 55.8
+Other climate fields: sigma 9/8/5/11 F; ground = groundwater temp 49/50/79/78 F
+(annual mean + ~2 F); aquifer supply 3000/2200/3500/1800 gpm and k
+1.3/1.4/1.5/1.2 are [ASSUMED] (no public data at a generic site).
+
+
+7. RESULTS AT DEFAULTS (generated by the engine; reproduce with dump scripts)
+------------------------------------------------------------------------------
+City           Baseline    Open-loop            Closed-loop          Hybrid
+               opex $/yr   net $ / sav / PB     net $ / sav / PB     net $ / sav / PB
+Minneapolis    803,967     2.58M / 119.6k / 21.6   8.03M / 168.2k / 47.7   5.65M / 132.5k / 42.6
+State College  632,412     2.05M /  94.7k / 21.6   4.98M / 138.3k / 36.0   3.80M / 109.4k / 34.7
+Miami        1,083,987     2.68M / 205.5k / 13.1  12.38M / 160.0k / 77.4  11.51M / 216.1k / 53.3
+Phoenix      1,051,056     1.29M / 233.5k /  5.5  12.42M / 226.7k / 54.8  13.43M / 316.6k / 42.4
+(PB = simple payback in years.) These are long paybacks for closed-loop because
+the default compares against a CHEAP gas boiler plus chiller, uses commercial
+electricity at 14 c/kWh, has no demand charges or incentives. Real airport
+projects often pencil better through grants (e.g. the $10.6M FAA grant in S8),
+avoided plant replacement, and utility incentives - use the Incentive slider.
+
+
+8. VALIDATION AGAINST A REAL PROJECT (Louisville SDF, S8)
+---------------------------------------------------------
+Inputs: 412,766 sq ft, Louisville monthly normals, k 1.4, sizing 100%, 25 ft spacing.
+Quantity               Model             Published
+Boreholes (500 ft)     549               648  (k=1.0 gives 723; bracket OK)
+Land footprint         7.9 acres         about 9 acres
+Energy reduction       72% (site)        about 40%
+Annual savings         $209k             about $400k
+Gross cost             $7.6M             $22M total (scope far larger)
+Calibration decisions: UA set to 0.70, spacing 25 ft and default
+land availability 20 acres, so the borefield size and land fall in the right
+range. Findings to be honest about: the model's energy reduction is HIGHER than
+published (different baseline, no heat recovery), and savings are LOWER (no
+demand charge, different tariff). The cost scope in the published $22M includes
+mechanical/electrical upgrades the simulator does not model. So Louisville
+validates borefield SIZE and LAND, not cost or savings.
+Reproduce: node verification/louisville.js
+
+
+9. INDEPENDENT VERIFICATION OF THE MATH
+---------------------------------------
+verification/verify.py re-implements demand (numerical integration), baseline,
+open-loop COP, flow, wells, energy, capex, opex, savings and payback in Python
+without importing engine code, using the engine's default inputs. 21 of 21
+checks agree within 0.00001% (the one numerically integrated value agrees to
+0.0003%). The closed-loop g-function drift and hybrid are checked by unit
+tests only (tests/engine.test.js: energy balance, no double counting, slider sums
+to 100%, monotonic behavior), NOT by an independent recomputation.
+
+
+10. UNVERIFIED ASSUMPTIONS - PLEASE CHECK BEFORE CITING
+-------------------------------------------------------
+ 1. Cost benchmarks (well $100k, $350/gpm HX, $150k fixed, $15/ft bore,
+    $1,500/bore, $2,000/ton heat pump plant, $1,800/ton chiller, $60/MBH
+    boiler): get a driller / contractor / RSMeans quote.
+ 2. Carnot-fraction efficiencies (0.50, 0.45, 0.33) and supply/chilled-water
+    temps: check manufacturer data for a water-source heat pump (e.g. AHRI 13256-1).
+ 3. Aquifer yield, supply and well yield (500 gpm): need a hydrogeologic study.
+ 4. UA 0.70, balance temps 55/60 F, latent factors, sigma: calibrated/rule of
+    thumb; check with an energy model (EnergyPlus/eQUEST) for the real terminal.
+ 5. Closed-loop resistance and drift fits (g, 0.06 factor, 0.12 R_bore).
+ 6. Linear load-duration assumption behind coverage = 1-(1-c)^2.
+ 7. O&M percentages (1.5%, 3.5%, 0.3%, 2.5%).
+ 8. Prices S1/S2 are national averages, not your airport's tariff (no demand
+    charges, no escalation, no discounting, undiscounted simple payback).
+ 9. Local cost multiplier defaults to 1.0.
+ 10. Ground/groundwater temperature = annual mean air + ~2 F.
+ 11. Regulatory: open-loop discharge/injection permits and water chemistry
+    (fouling, corrosion) are not modeled.
+ 12. No hourly simulation; seasons use monthly normal distributions.
+
+LIMITATIONS: pre-design comparison tool; not a substitute for GLHEPro/EED,
+EnergyPlus, or a hydrogeologic and cost study.
