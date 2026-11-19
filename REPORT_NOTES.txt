@@ -1,0 +1,33 @@
+REPORT FIXES - numbers and wording to use in Team4_LeadE_Final_Report
+=====================================================================
+All numbers: State College PA, 500,000 sq ft, new/replacement plant. Source: simulator + Open-Loop_CBA.xlsx (they match to the cent).
+
+1. WHY THE OLD PAYBACK DID NOT ADD UP
+   The report said the existing boiler and chiller were KEPT as backup and also took a credit for avoided HVAC equipment. Both cannot be true.
+   Fix: say the project buys a SMALLER backup boiler and chiller because the wells carry about 72% of peak load. The avoided cost is $2,281,263.
+   Replace "Kept the existing boiler and chiller as backup" with: "Right-sized a smaller backup boiler and chiller (about $870,000) for the roughly 28% of peak load the wells do not cover."
+
+2. NUMBERS TO PUT IN THE REPORT
+   Geothermal equipment (10 wells, heat exchanger, piping, heat pump plant)  $4,328,271
+   Boiler and chiller not needed                                             $2,281,263
+   Extra cost, no grant                                                      $2,047,008
+   30% federal credit on geothermal equipment                                $1,298,481
+   Extra cost, with grant                                                      $748,527
+   Operating cost: traditional $632,412, open-loop $537,692; savings          $94,719 per year
+   SIMPLE PAYBACK: 21.6 years without grant, 7.9 years with grant
+   Net savings over 25 years: +$320,976 without, +$1,619,457 with grant
+   Present value at 3%: -$397,646 without, +$900,835 with. Discounted payback with grant 9.2 years.
+   Energy use down about 70%; operating cost down about 15%; CO2 avoided about 1,320 t per year; wells 10 (2,200 gpm).
+
+3. SENTENCES TO ADD
+   - "Without a grant the payback (21.6 years) is close to the 25-year equipment life, so the project is marginal on cost alone. With a 30% Section 48 credit claimed through elective pay, payback falls to 7.9 years."
+   - "Operating cost falls about 15% even though energy falls about 70%, because natural gas heat is cheaper per unit of energy than electricity."
+   - "Payback is sensitive to energy prices: a 20% drop in the gas price moves the no-grant payback past 100 years; a 20% rise cuts it to 12 years."
+
+4. HONEST CAVEATS TO STATE (a grader or reviewer may ask)
+   - The 30% credit assumes the airport qualifies through elective pay, groundwater systems count, and prevailing wage rules are met. With only the 6% base, payback is about 18.9 years. Confirm with tax counsel/FAA.
+   - Cost benchmarks (wells, heat pump $/ton, etc.) are pre-design assumptions, not quotes. The aquifer supply (2,200 gpm) needs a hydrogeology study.
+   - If the airport keeps a working full-size plant instead of buying a new one, there is no avoided-plant credit and payback is much longer.
+
+5. CHECK YOUR OWN TEXT
+   Any place the report shows a payback or "net cost" that differs from section 2 above, replace it with these values, and always label it "without grant" or "with grant".

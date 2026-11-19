@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Airport Geothermal Simulator</title>
-<meta name="description" content="Interactive prototype comparing open-loop, closed-loop and hybrid geothermal heating and cooling for an airport terminal.">
+<title>Airport Open-Loop Geothermal Simulator</title>
+<meta name="description" content="Interactive 3D simulator and cost-benefit analysis for an open-loop (groundwater) geothermal heating and cooling system at an airport terminal.">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/theme2.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to results</a>
 
 <div class="masthead"><header class="top">
   <div class="brand">
-    <h1>Airport Geothermal Simulator</h1>
-    <p>Compare open-loop, closed-loop and hybrid geothermal heating and cooling for an airport terminal.</p>
+    <span class="eyebrow">ACRP University Design Challenge · Team 4</span>
+    <h1>Open-Loop Geothermal Simulator</h1>
+    <p>Groundwater heating and cooling for an airport terminal: live 3D model, cost, savings and payback, with and without a grant.</p>
   </div>
+  <div class="hero" id="hero" aria-live="polite"></div>
   <div class="actions">
     <button type="button" class="btn ghost" id="btn-controls" aria-expanded="false" aria-controls="controls">Inputs</button>
     <button type="button" class="btn ghost" id="btn-theme" aria-label="Switch light or dark theme">Theme</button>
@@ -22,7 +25,7 @@
     <div class="menu">
       <button type="button" class="btn" id="btn-export" aria-haspopup="true" aria-expanded="false">Export results</button>
       <ul class="menu-list" id="export-menu" hidden>
-        <li><button type="button" data-export="csv">Download CSV (comparison table)</button></li>
+        <li><button type="button" data-export="csv">Download CSV (cost and payback)</button></li>
         <li><button type="button" data-export="json">Download JSON (inputs and results)</button></li>
         <li><button type="button" data-export="print">Print or save as PDF</button></li>
       </ul>
@@ -30,16 +33,15 @@
   </div>
 </header></div>
 
-<p class="notice"><strong>Illustrative prototype.</strong> Weather, ground, groundwater and cost figures are rough example values for a college project, not site measurements or engineering design numbers. Every assumption is listed under <button type="button" class="linklike" data-goto="how">How it works</button>.</p>
-
 <div class="layout">
   <aside id="controls" class="controls" aria-label="Inputs"></aside>
   <main id="main" class="main">
-    <nav class="tabs" role="tablist" aria-label="Geothermal systems">
-      <button role="tab" id="tab-open" data-tab="open" aria-controls="panel-open"><i class="dot open"></i>Open-loop</button>
-      <button role="tab" id="tab-closed" data-tab="closed" aria-controls="panel-closed"><i class="dot closed"></i>Closed-loop</button>
-      <button role="tab" id="tab-hybrid" data-tab="hybrid" aria-controls="panel-hybrid"><i class="dot hybrid"></i>Hybrid</button>
-      <button role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare">Compare all</button>
+    <nav class="tabs" role="tablist" aria-label="Simulator sections">
+      <button role="tab" id="tab-sim" data-tab="sim" aria-controls="panel-sim">3D simulator</button>
+      <button role="tab" id="tab-cba" data-tab="cba" aria-controls="panel-cba">Cost and payback</button>
+      <button role="tab" id="tab-what" data-tab="what" aria-controls="panel-what">What-if</button>
+      <button role="tab" id="tab-risk" data-tab="risk" aria-controls="panel-risk">Risks</button>
+      <button role="tab" id="tab-why" data-tab="why" aria-controls="panel-why">Why open-loop</button>
       <button role="tab" id="tab-how" data-tab="how" aria-controls="panel-how">How it works</button>
     </nav>
     <section id="strip" class="strip" aria-live="polite"></section>
@@ -47,7 +49,7 @@
   </main>
 </div>
 
-<footer class="foot">ACRP University Design Challenge, Team 4. Prototype for discussion with engineers; not for design or procurement decisions.</footer>
+<footer class="foot">ACRP University Design Challenge, Team 4. Prototype for discussion with engineers; not for design or procurement decisions. Sources and every calculation: SOURCES_AND_CALCULATIONS.txt.</footer>
 
 <script src="js/engine.js"></script>
 <script src="js/charts.js"></script>

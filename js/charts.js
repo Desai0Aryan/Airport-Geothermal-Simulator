@@ -69,6 +69,7 @@
     });
     if (cfg.refLine != null) vmax = Math.max(vmax, cfg.refLine);
     const sc = niceScale(vmin, vmax <= 0 ? 1 : vmax * 1.04, 4);
+    m.l = Math.max(m.l, 16 + 7 * Math.max.apply(null, sc.ticks.map(t => String(axf(t)).length)));
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
     const Y = v => m.t + ih - (v - sc.lo) / (sc.hi - sc.lo) * ih;
     const band = iw / cats.length, pad = Math.min(0.32 * band, 22);
@@ -121,6 +122,7 @@
     if (cfg.zero) { vmin = Math.min(vmin, 0); vmax = Math.max(vmax, 0); }
     const pad = (vmax - vmin) * 0.06 || 1;
     const sc = niceScale((cfg.zero || vmin >= 0) ? Math.min(vmin, 0) : vmin - pad, vmax + pad, 4);
+    m.l = Math.max(m.l, 16 + 7 * Math.max.apply(null, sc.ticks.map(t => String(axf(t)).length)));
     const iw = W - m.l - m.r, ih = H - m.t - m.b, n = xs.length;
     const X = i => m.l + (n > 1 ? i / (n - 1) : 0.5) * iw, Y = v => m.t + ih - (v - sc.lo) / (sc.hi - sc.lo) * ih;
     let out = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="' + esc(cfg.title || 'chart') + '">';

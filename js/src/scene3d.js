@@ -179,7 +179,7 @@ function makeScene(container, kind) {
   container.appendChild(renderer.domElement);
   const labelLayer = document.createElement('div'); labelLayer.className = 's3d-labels'; container.appendChild(labelLayer);
   const hud = document.createElement('div'); hud.className = 's3d-hud';
-  hud.innerHTML = '<div class="s3d-status" aria-live="polite"></div><div class="s3d-tools"><button type="button" data-a="reset">Reset view</button><button type="button" data-a="rotate" aria-pressed="false">Auto-rotate</button><button type="button" data-a="labels" aria-pressed="true">Labels</button><button type="button" data-a="xray" aria-pressed="true">X-ray ground</button></div><div class="s3d-hint">Drag to rotate. Click the model, then scroll to zoom.</div>';
+  hud.innerHTML = '<div class="s3d-status" aria-live="polite"></div><div class="s3d-tools"><button type="button" data-a="reset">Reset view</button><button type="button" data-a="rotate" aria-pressed="false">Auto-rotate</button><button type="button" data-a="labels" aria-pressed="true">Labels</button><button type="button" data-a="xray" aria-pressed="true">X-ray ground</button><button type="button" data-a="night" aria-pressed="false">Night mode</button></div><div class="s3d-views" role="group" aria-label="Camera views"><button type="button" data-v="overview">Overview</button><button type="button" data-v="wells">Wells</button><button type="button" data-v="plant">Plant</button><button type="button" data-v="terminal">Terminal</button><button type="button" data-v="under">Underground</button></div><div class="s3d-hint">Drag to rotate. Click the model, then scroll to zoom.</div>';
   container.appendChild(hud);
 
   const scene = new THREE.Scene();
@@ -214,7 +214,7 @@ function makeScene(container, kind) {
   } catch (e) { composer = null; }
 
   const staticG = new THREE.Group(), dynG = new THREE.Group(); scene.add(staticG, dynG);
-  const S = { sig: '', mode: 'idle', load: 0, T: 50, xray: true, labels: true, items: [], parts: [], fans: [], halo: [], plume: [], glass: null, layerMats: [], snow: null, sun: null, clouds: [], labelEls: [], ctx: null, time: 0, speed: 0.05 };
+  const S = { sig: '', mode: 'idle', load: 0, T: 50, xray: true, labels: true, items: [], parts: [], fans: [], halo: [], plume: [], glass: null, layerMats: [], snow: null, sun: null, clouds: [], labelEls: [], ctx: null, time: 0, speed: 0.05, glow: [], night: false, tween: null };
 
   /* ---- sky, fog, plinth ---- */
   const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: { top: { value: new THREE.Color(0x4d92d0) }, bot: { value: new THREE.Color(0xcfe6f5) } },
@@ -254,12 +254,22 @@ function makeScene(container, kind) {
   for (let i = 0; i < 14; i++) { const x = -34 + i * 5.2, z = -13.6 + (i % 3) * 0.2; tmpO.position.set(x, 2.1, z); tmpO.scale.setScalar(0.85 + (i % 4) * 0.12); tmpO.updateMatrix(); treeT.setMatrixAt(i, tmpO.matrix); tmpO.position.set(x, 0.45, z); tmpO.scale.setScalar(1); tmpO.updateMatrix(); trunk.setMatrixAt(i, tmpO.matrix); }
   staticG.add(treeT, trunk); S.trees = treeT.material;
   // light poles
-  for (let i = 0; i < 7; i++) { const x = -33 + i * 11; staticG.add(cyl(0.1, 0.14, 5.5, 0x8d99a3, x, 2.75, 18.6, { metalness: 0.6 }, 8)); const head = box(1.1, 0.18, 0.5, 0xfff2cf, x, 5.55, 18.3, { emissive: 0xffe3a3, emissiveIntensity: 2.4 }); staticG.add(head); }
+  for (let i = 0; i < 7; i++) { const x = -33 + i * 11; staticG.add(cyl(0.1, 0.14, 5.5, 0x8d99a3, x, 2.75, 18.6, { metalness: 0.6 }, 8)); const head = box(1.1, 0.18, 0.5, 0xfff2cf, x, 5.55, 18.3, { emissive: 0xffe3a3, emissiveIntensity: 2.4 }); staticG.add(head); S.glow.push([head.material, 2.4, 5]); }
   // terminal, tower, aircraft, ground vehicle
   S.term = buildTerminal(S); staticG.add(S.term);
   S.tower = buildTower(); staticG.add(S.tower);
   const plane = buildAircraft(0x1d5fb4); plane.position.set(0, 2.38, 13.4); plane.rotation.y = Math.PI; staticG.add(plane); S.plane = plane;
   S.tug = buildCarTug(); S.tug.position.set(0, 0, 4.2); staticG.add(S.tug);
+  S.glow.push([S.interior, 0.7, 1.0]);
+  // apron edge lights (blue), glow strongly at night
+  const eN = 52, edge = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), eN * 2); const eo = new THREE.Object3D(); S.edgeMat = edge.material; edge.userData.noShadow = true;
+  for (let i = 0; i < eN; i++) { const x = -36 + i * (72 / (eN - 1)); eo.position.set(x, 0.18, 19.4); eo.updateMatrix(); edge.setMatrixAt(i, eo.matrix); eo.position.set(x, 0.18, -2.2); eo.updateMatrix(); edge.setMatrixAt(eN + i, eo.matrix); }
+  staticG.add(edge);
+  // distant aircraft flying across the sky
+  S.fly = buildAircraft(0xd6402f); S.fly.scale.setScalar(0.7); S.fly.rotation.y = Math.PI / 2; scene.add(S.fly);
+  const stA = new Float32Array(500 * 3), rs = rng(11); for (let i = 0; i < 500; i++) { const th = rs() * 6.283, ph = Math.acos(0.15 + rs() * 0.85), R = 360; stA[i * 3] = R * Math.sin(ph) * Math.cos(th); stA[i * 3 + 1] = R * Math.cos(ph); stA[i * 3 + 2] = R * Math.sin(ph) * Math.sin(th); }
+  const stG = new THREE.BufferGeometry(); stG.setAttribute('position', new THREE.BufferAttribute(stA, 3));
+  S.stars = new THREE.Points(stG, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.9, depthWrite: false, fog: false })); S.stars.visible = false; scene.add(S.stars);
 
   // weather
   const sunC = document.createElement('canvas'); sunC.width = sunC.height = 128; const sg = sunC.getContext('2d'); const gr = sg.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(255,250,220,1)'); gr.addColorStop(0.3, 'rgba(255,218,130,.8)'); gr.addColorStop(1, 'rgba(255,190,80,0)'); sg.fillStyle = gr; sg.fillRect(0, 0, 128, 128);
@@ -402,6 +412,17 @@ function makeScene(container, kind) {
     sunL.color.set(snowy ? 0xdce8f5 : hotDay ? 0xffeccc : 0xffffff); sunL.intensity = snowy ? 1.4 : hotDay ? 2.6 : 2.2; hemi.intensity = snowy ? 0.8 : 0.55;
     S.topMat.color.set(snowy ? 0xf2f6fa : hotDay ? 0xd9c58a : 0xffffff);
     S.roofMat.color.set(snowy ? 0xffffff : 0xe9eef2); S.trees.color.set(snowy ? 0xdfe9e4 : 0xffffff);
+    S.sun.material.color.set(0xffffff); S.sun.position.set(60, 60, -90);
+    const nt = S.night;
+    if (nt) {
+      skyMat.uniforms.top.value.set(0x040a1c); skyMat.uniforms.bot.value.set(0x1d2f55); scene.fog.color.set(0x16233f);
+      sunL.color.set(0x8fb0ff); sunL.intensity = 0.55; hemi.intensity = 0.28; fillL.intensity = 0.15; S.sun.visible = true; S.sun.material.color.set(0xcfe0ff); S.sun.position.set(-55, 70, -90); S.sun.scale.setScalar(46); S.sun.material.opacity = 1;
+      S.clouds.forEach(sp => { sp.material.opacity = 0.18; sp.material.color.set(0x7d93c4); });
+      S.topMat.color.set(snowy ? 0x9fb0cc : 0x6f8a78); renderer.toneMappingExposure = 0.95;
+    } else { fillL.intensity = 0.5; renderer.toneMappingExposure = 1.05; }
+    S.stars.visible = nt; if (bloom) { bloom.strength = nt ? 0.8 : 0.6; bloom.threshold = nt ? 0.85 : 1.0; }
+    S.glow.forEach(g => { g[0].emissiveIntensity = nt ? g[2] : g[1]; });
+    if (S.edgeMat) S.edgeMat.color.set(nt ? 0x6fc4ff : 0x2a7ac0).multiplyScalar(nt ? 3.2 : 1.1);
     container.dataset.season = ctx.season; container.dataset.weather = snowy ? 'snow' : sunny ? 'sun' : 'mild';
     setXray(S.xray);
     const status = hud.querySelector('.s3d-status');
@@ -420,7 +441,9 @@ function makeScene(container, kind) {
   function frame(dt) {
     S.time += dt;
     if (introOn) { introT = Math.min(1, introT + dt / 2.2); const e = 1 - Math.pow(1 - introT, 3); camera.position.lerpVectors(introFrom, home, e); if (introT >= 1) introOn = false; }
+    if (S.tween) { S.tween.t = Math.min(1, S.tween.t + dt / 1.1); const k = S.tween.t, e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(S.tween.fp, S.tween.tp, e); controls.target.lerpVectors(S.tween.ft, S.tween.tt, e); if (k >= 1) S.tween = null; }
     controls.update();
+    if (S.fly) { const u = (S.time % 45) / 45; S.fly.position.set(-190 + u * 380, 52 + Math.sin(u * 6.28) * 4, -60 - 20 * u); S.fly.rotation.z = Math.sin(u * 6.28) * 0.07; }
     S.parts.forEach(g => {
       g.items.forEach((it, i) => {
         const t = it.ph + S.time * S.speed * it.speedMul, p = it.path.at(t);
@@ -450,11 +473,15 @@ function makeScene(container, kind) {
     const k = Math.min(1.6, Math.max(1, 1.42 / (w / h))); home.copy(homeT).addScaledVector(homeBase.clone().sub(homeT), k); if (!introOn && !userMoved) camera.position.copy(home);
   }
   new ResizeObserver(resize).observe(container); resize();
+  const VIEWS = { overview: [() => home, homeT], wells: [V(4, 7, 46), V(1, -4, 9)], plant: [V(-48, 13, 18), V(-27, 2, -6)], terminal: [V(12, 9, 40), V(0, 3, -6)], under: [V(2, -9, 64), V(0, -7, 8)] };
   hud.addEventListener('click', e => {
+    const vb = e.target.closest('[data-v]');
+    if (vb) { stopIntro(); userMoved = true; const v = VIEWS[vb.dataset.v]; const tp = typeof v[0] === 'function' ? v[0]().clone() : v[0]; S.tween = { t: 0, fp: camera.position.clone(), tp, ft: controls.target.clone(), tt: v[1].clone() }; return; }
     const b = e.target.closest('button'); if (!b) return; const a = b.dataset.a;
     if (a === 'reset') { stopIntro(); camera.position.copy(home); controls.target.copy(homeT); controls.autoRotate = false; hud.querySelector('[data-a=rotate]').setAttribute('aria-pressed', 'false'); }
     if (a === 'rotate') { stopIntro(); controls.autoRotate = !controls.autoRotate; b.setAttribute('aria-pressed', controls.autoRotate); }
     if (a === 'labels') { S.labels = !S.labels; b.setAttribute('aria-pressed', S.labels); S.labelEls.forEach(l => { l.el.hidden = !S.labels; }); }
+    if (a === 'night') { S.night = !S.night; b.setAttribute('aria-pressed', S.night); if (S.ctx) update(S.ctx); }
     if (a === 'xray') { setXray(!S.xray); b.setAttribute('aria-pressed', S.xray); }
   });
   const api = { update, frame, resize, container, kind, isVisible: () => container.offsetParent !== null && container.clientWidth > 0, snapshot: () => renderer.domElement.toDataURL('image/png'), controls, camera, skipIntro: () => { introOn = false; camera.position.copy(home); } };

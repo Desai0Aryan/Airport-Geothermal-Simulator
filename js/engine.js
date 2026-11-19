@@ -68,7 +68,9 @@
       elecPrice: 0.14,           // $/kWh (EIA STEO: US commercial average 14.00 c/kWh for 2026)
       gasPrice: 1.07,            // $/therm (EIA: US commercial 2025 $10.98/Mcf / 10.26 therm per Mcf)
       costMult: 1.0,             // global installation-cost multiplier
-      incentive: 0,              // % grants / incentives
+      incentive: 0,              // legacy engine field (kept at 0); the grant case is modeled in economics() with grantPct
+      grantPct: 30,              // 'with grant' case: % of eligible geothermal cost recovered (Section 48 credit via elective pay, 30% with prevailing wage)
+      discountPct: 3,            // real discount rate for NPV and discounted payback
       creditConv: true,          // credit avoided boiler/chiller purchase
       landAvail: 20,             // acres available near terminal
       groundTemp: c.groundTemp,  // undisturbed ground temperature, degF
@@ -535,6 +537,64 @@
     });
   }
 
+
+  /* ---------- cost-benefit economics for the open-loop design, without and with a grant ----------
+     Traditional option  : buy a full gas boiler + air-cooled chiller (if creditConv) or keep the existing plant (retrofit).
+     Open-loop option    : wells + heat exchanger + heat pump plant (the "geothermal property"), plus a right-sized
+                           backup boiler/chiller for the load geothermal does not cover.
+     Extra cost          : open-loop option cost minus traditional option cost = gross - credit.
+     Grant               : grantPct of the geothermal property cost (gross). Backup equipment is not eligible. */
+  function economics(p, res) {
+    const o = res.open, b = res.baseline, L = LIFE_YEARS, r = p.discountPct / 100;
+    const gross = o.capex.gross, credit = o.capex.credit;
+    const tradCapex = p.creditConv ? b.capex.gross : 0;
+    const backup = p.creditConv ? b.capex.gross - credit : 0;
+    const geoCapex = gross + backup;
+    const extra = geoCapex - tradCapex;                         // = gross - credit
+    const sav = o.savings;
+    const grantAmt = gross * p.grantPct / 100;
+    const af = r > 0 ? (1 - Math.pow(1 + r, -L)) / r : L;       // present value of $1/yr for L years
+    const scen = (net) => ({
+      net, payback: sav <= 0 ? Infinity : (net <= 0 ? 0 : net / sav),
+      lifeNet: sav * L - net, npv: sav * af - net,
+      discPayback: sav <= 0 ? Infinity : (net <= 0 ? 0 : (r * net / sav >= 1 ? Infinity : -Math.log(1 - r * net / sav) / Math.log(1 + r))),
+      cumulative: Array.from({ length: 31 }, (_, t) => -net + sav * t)
+    });
+    return { plant: o.capex.plant, source: o.capex.source, gross, credit, backup, tradCapex, geoCapex, extra, grantPct: p.grantPct, grant: grantAmt,
+             savings: sav, tradOpex: b.annual.opex, geoOpex: o.annual.opex, life: L, discountPct: p.discountPct, annuityFactor: af,
+             noGrant: scen(extra), withGrant: scen(extra - grantAmt) };
+  }
+  function paybackOf(q) { const r = computeAll(q), e = economics(q, r); return { n: e.noGrant.payback, g: e.withGrant.payback, e }; }
+
+  /* one-at-a-time sensitivity of payback to the main inputs (low / high versions) */
+  function sensitivity(p) {
+    const base = paybackOf(p);
+    const clone = () => JSON.parse(JSON.stringify(p));
+    const defs = [
+      ['Electricity price', 'elecPrice', -0.2, 0.2, q => q.elecPrice],
+      ['Natural gas price', 'gasPrice', -0.2, 0.2, q => q.gasPrice],
+      ['Well cost', 'open.wellCost', -0.25, 0.25],
+      ['Heat exchanger, pumps and piping cost', 'open.hxCostPerGpm', -0.25, 0.25],
+      ['Heat pump plant cost per ton', 'plantCostPerTon', -0.25, 0.25],
+      ['Traditional boiler and chiller cost', ['adv.convCoolPerTon', 'adv.convHeatPerMBH'], -0.25, 0.25],
+      ['Heating and cooling demand', ['heatMult', 'coolMult'], -0.2, 0.2],
+      ['Maintenance rates (geothermal)', ['adv.omPlant', 'adv.omOpen'], -0.5, 0.5],
+      ['Heat pump efficiency', ['adv.etaH', 'adv.etaC'], -0.1, 0.1],
+      ['Pumping energy', 'open.kwPer100', -0.3, 0.3]
+    ];
+    const setk = (o, k, f) => { const a = k.split('.'), l = a.pop(); const t = a.reduce((x, y) => x[y], o); t[l] *= (1 + f); };
+    const rows = defs.map(d => {
+      const keys = [].concat(d[1]), out = { label: d[0], lowPct: d[2], highPct: d[3] };
+      [['low', d[2]], ['high', d[3]]].forEach(([nm, f]) => { const q = clone(); keys.forEach(k => setk(q, k, f)); const r = paybackOf(q); out[nm] = r.n; out[nm + 'G'] = r.g; });
+      return out;
+    });
+    return { base: { n: base.n, g: base.g }, rows };
+  }
+  /* payback grid over electricity and gas prices */
+  function paybackMap(p, elecList, gasList) {
+    return gasList.map(g => elecList.map(e => { const q = JSON.parse(JSON.stringify(p)); q.elecPrice = e; q.gasPrice = g; const r = paybackOf(q); return { e, g, n: r.n, gr: r.g, sav: r.e.savings }; }));
+  }
+
   /* strip functions so results can be JSON-exported */
   function toPlain(res) {
     return JSON.parse(JSON.stringify(res, (k, v) => (typeof v === 'function' ? undefined : (v === Infinity ? 'no payback' : v))));
@@ -542,5 +602,5 @@
 
   return { CLIMATES, SEASONS, SEASON_ORDER, MONTH_NAMES, MONTH_HOURS, LIFE_YEARS, BTU_PER_KWH, KWH_PER_THERM,
            makeDefaults, computeAll, snapshot, climateMatrix, seasonTypicalTemp, loadsAt, buildLoads,
-           copHeat, copCool, copBaselineCool, degreeHours, toPlain };
+           copHeat, copCool, copBaselineCool, degreeHours, toPlain, economics, sensitivity, paybackMap };
 });
